@@ -72,7 +72,7 @@ produces:
 
 ## Reference
 
-### *future* = async.addthread(*fn*)
+#### *future* = async.addthread(*fn*)
 
 Runs a function in its own thread, and returns a "future" (an object that can be queried
 later to obtain the result of the function).
@@ -81,17 +81,17 @@ Note that the function runs it its own Lanes context, so upvalues are _copied_ i
 function (note in the above example setting `msg` to `"world"` does not affect the
 instance of `msg` running in the async thread).
 
-### *future*:get() 
+#### *future*:get() 
 
 Waits until the async thread finished (without locking other Copas coroutines) and
 obtains the result value of the async thread function.
 
-### *future*:try() 
+#### *future*:try() 
 
 Obtains the result value of the async thread function if it is already available,
 or returns `nil` if it is still running. This function always returns immediately.
 
-### *ok*, *typ*, *code* = async.os_execute(*cmd*) 
+#### *ok*, *typ*, *code* = async.os_execute(*cmd*) 
 
 Convenience function that runs **os.execute(*cmd*)** in its own async thread.
 This allows you to easily run long-lived commands in your own coroutine without
