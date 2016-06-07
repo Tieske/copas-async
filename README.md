@@ -108,3 +108,15 @@ in its future).
 The return values are the [same as in `os.execute` for Lua 5.3](http://www.lua.org/manual/5.3/manual.html#pdf-os.execute)
 (even when running on Lua 5.1).
 
+#### *fd* = async.io_popen(*cmd*, *mode*)
+
+Convenience function that runs **io.popen(*cmd*, *mode*)** in its own async thread.
+This allows you to easily run long-lived commands in your own coroutine and
+get their output without affecting the Copas scheduler as a whole.
+
+This function returns a descriptor object with an API that matches that of the
+object [returned by `io.popen` in Lua 5.3](http://www.lua.org/manual/5.3/manual.html#pdf-io.popen).
+When commands are issued, this causes the current coroutine to wait until
+the response is returned, without locking other coroutines
+(in other words, it uses futures internally). Only the functions `fd:read`, `fd:write`
+and `fd:close` are currently supported.
