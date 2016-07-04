@@ -163,7 +163,7 @@ function async.channel()
       local future = new_future(ch, "data")
       local res = pack(future[op](future))
       self.accessing = false
-      return unpack(res)
+      return unpack(res, 1, res.n)
    end
    
    return {
