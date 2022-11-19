@@ -4,18 +4,15 @@ local async = {}
 local lanes = require("lanes")
 local copas = require("copas")
 local socket = require("socket")
-local unpack = unpack or table.unpack
 
 lanes.configure()
 
-local function pack(...)
-   local ret = { n = select("#", ...) }
-   for i = 1, ret.n do
-      ret[i] = select(i, ...)
-   end
-   return ret
-end
-
+local pack, unpack do -- pack/unpack to create/honour the .n field for nil-safety
+   local _unpack = _G.table.unpack or _G.unpack
+   function pack (...) return { n = select('#', ...), ...} end
+   function unpack(t, i, j) return _unpack(t, i or 1, j or t.n or #t) end
+ end
+ 
 local function normalize_exit(ret, typ, cod)
    if type(ret) == "number" then
       if ret == 0 then
@@ -99,7 +96,7 @@ local function new_future(ch, ch_id)
          end
       end
       if future.res then
-         return future.dead, unpack(future.res, 1, future.res.n)
+         return future.dead, unpack(future.res)
       end
    end
    future.get = function()
@@ -127,7 +124,7 @@ local function new_future(ch, ch_id)
       end
       future.getting = false
       if future.res then
-         return unpack(future.res, 1, future.res.n)
+         return unpack(future.res)
       end
    end
    setmetatable(future, { __call = future.get })
@@ -163,7 +160,7 @@ function async.channel()
       local future = new_future(ch, "data")
       local res = pack(future[op](future))
       self.accessing = false
-      return unpack(res, 1, res.n)
+      return unpack(res)
    end
    
    return {
