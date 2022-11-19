@@ -181,6 +181,7 @@ function async.channel()
 end
 
 function async.io_popen(command, mode)
+   mode = mode or "r"
    local ch = lanes.linda()
 
    async.addthread(function()
