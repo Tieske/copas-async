@@ -118,7 +118,7 @@ local function new_future(ch, ch_id)
          if key then
             future.res = value
          else
-            local key, value = ch:receive(0, ch_id)
+            key, _ = ch:receive(0, ch_id)
             if not key then
                add_waiting_coro(tostring(ch), me)
                copas.sleep(-1)
