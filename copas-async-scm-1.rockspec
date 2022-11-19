@@ -3,7 +3,7 @@ package = "Copas-Async"
 version = "scm-1"
 
 source = {
-   url = "git://github.com/hishamhm/copas-async",
+   url = "git+https://github.com/hishamhm/copas-async",
 }
 
 description = {
