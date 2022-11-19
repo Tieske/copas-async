@@ -81,21 +81,21 @@ produces:
 Runs a function in its own thread, and returns a "future" (an object that can be queried
 later to obtain the result of the function).
 
-Note that the function runs it its own Lanes context, so upvalues are _copied_ into the 
+Note that the function runs it its own Lanes context, so upvalues are _copied_ into the
 function (note in the above example setting `msg` to `"world"` does not affect the
 instance of `msg` running in the async thread).
 
-#### *future*:get() 
+#### *future*:get()
 
 Waits until the async thread finished (without locking other Copas coroutines) and
 obtains the result value of the async thread function.
 
-#### *future*:try() 
+#### *future*:try()
 
 Obtains the result value of the async thread function if it is already available,
 or returns `nil` if it is still running. This function always returns immediately.
 
-#### *ok*, *typ*, *code* = async.os_execute(*cmd*) 
+#### *ok*, *typ*, *code* = async.os_execute(*cmd*)
 
 Convenience function that runs **os.execute(*cmd*)** in its own async thread.
 This allows you to easily run long-lived commands in your own coroutine without
@@ -103,7 +103,7 @@ affecting the Copas scheduler as a whole.
 
 This function causes the current coroutine to wait until the command is finished,
 without locking other coroutines (in other words, it internally runs `get()`
-in its future). 
+in its future).
 
 The return values are the [same as in `os.execute` for Lua 5.3](http://www.lua.org/manual/5.3/manual.html#pdf-os.execute)
 (even when running on Lua 5.1).
