@@ -1,3 +1,11 @@
+---------------------------------------------------------------------------------------
+-- Copas-friendly true asynchronous threads, powered by Lua Lanes.
+--
+-- @copyright Copyright (c) 2016 Hisham Muhammad
+-- @author Hisham Muhammad
+-- @license MIT, see `LICENSE.md`.
+-- @name copas-async
+-- @class module
 
 local async = {}
 
@@ -79,6 +87,16 @@ do -- wakeup server
    end
 end
 
+-- Called in the async thread when results are ready to be send to the
+-- owning coroutine.
+-- Sends the type and the data over the Linda, then
+-- creates a socket, connects to the wakeup server, and send the stringified
+-- Linda (eg. "Linda: 0xfaf38c0"), as ID of the targetted Linda.
+-- The wakeup server (in the copas environment), will find the appropriate coroutine and resume it.
+-- @param ch the Lanes Linda object
+-- @param ch_id "done", "data", "result", etc.
+-- @param ... the data to be packed and send over the linda
+-- @return nothing
 local function awake_future(ch, ch_id, ...)
    local socket = require("socket")
    ch:send(ch_id, pack(...))
@@ -92,6 +110,11 @@ end
 
 local function new_future(ch, ch_id)
    local future = {}
+
+    --- Obtains the result value of the async thread function if it is already available,
+    -- or returns `nil` if it is still running. This function always returns immediately.
+    -- @function future:try
+    -- @return success + the async function results, or `nil` if not yet available
    future.try = function()
       if future.getting == true then
          error("concurrent access to future")
@@ -103,10 +126,18 @@ local function new_future(ch, ch_id)
             future.dead = true
          end
       end
+      -- TODO: differentiate between nil as a result and nil as not ready yet?
       if future.res then
          return future.dead, unpack(future.res)
       end
    end
+
+   --- Waits until the async thread finished (without locking other Copas coroutines) and
+   -- obtains the result value of the async thread function.
+   --
+   -- Calling on the future object is a shortcut to this `get` method.
+   -- @function future:get
+   -- @return the async function results
    future.get = function()
       if future.getting == true then
          error("concurrent access to future")
@@ -139,6 +170,16 @@ local function new_future(ch, ch_id)
    return future
 end
 
+
+
+--- Runs a function in its own thread, and returns a "future" (an object
+-- that can be queried later to obtain the result of the function).
+--
+-- Note that the function runs it its own Lanes context, so upvalues are
+-- copied into the function. When modified in that function, it will not update
+-- the original values living Copas side.
+-- @tparam function fn the function to execute async
+-- @return a `future`
 function async.addthread(fn)
    local ch = lanes.linda()
 
@@ -150,6 +191,18 @@ function async.addthread(fn)
    return new_future(ch, "done")
 end
 
+
+
+--- Convenience function that runs an os command in its own async thread.
+-- This allows you to easily run long-lived commands in your own coroutine without
+-- affecting the Copas scheduler as a whole.
+--
+-- This function causes the current coroutine to wait until the command is finished,
+-- without locking other coroutines (in other words, it internally runs `get()`
+-- in its future).
+-- @tparam string command The command to pass to `os.execute` in the async thread.
+-- @return ok, type, code [same as in `os.execute` for Lua 5.3](https://www.lua.org/manual/5.3/manual.html#pdf-os.execute)
+-- (even when running on Lua 5.1).
 function async.os_execute(command)
    local future = async.addthread(function()
       return os.execute(command)
@@ -185,7 +238,7 @@ function async.io_popen(command, mode)
    local ch = lanes.linda()
 
    async.addthread(function()
-      local fd, err = io.popen(command, mode)
+    local fd, err = io.popen(command, mode)
       if not fd then
          return nil, err
       end
