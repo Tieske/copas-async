@@ -27,45 +27,55 @@ local function normalize_exit(ret, typ, cod)
    end
 end
 
-local wskt = socket.bind("*", 0)
-local whost, wport = wskt:getsockname()
-wport = tonumber(wport)
+local whost, wport
+local add_waiting_coro
 
-local waiting = {}
+do -- wakeup server
+   local waiting = {}
 
-local function launch_wakeup_server()
-   copas.addserver(wskt, function(dskt)
-      local id = ""
-      while true do
-         local data, err, partial = dskt:receive()
-         if data == nil then
-            if partial then
-               id = id .. partial
-            end
-         else
-            id = id .. data
-         end
-         if err == "closed" then
-            break
-         end
-      end
-      dskt:close()
+   local wskt = socket.bind("*", 0)
+   whost, wport = wskt:getsockname()
+   wport = tonumber(wport)
+
+   local function remove_waiting_coro(id)
       local coro = waiting[id]
       waiting[id] = nil
       if not next(waiting) then
          copas.removeserver(wskt, true) -- keep the server socket open
       end
-      if coro then
-         copas.wakeup(coro)
-      end
-   end)
-end
+      return coro
+   end
 
-local function add_waiting_coro(id, coro)
-   local empty = not next(waiting)
-   waiting[id] = coro
-   if empty then
-      launch_wakeup_server()
+   local function launch_wakeup_server()
+      copas.addserver(wskt, function(dskt)
+         local id = ""
+         while true do
+            local data, err, partial = dskt:receive()
+            if data == nil then
+               if partial then
+                  id = id .. partial
+               end
+            else
+               id = id .. data
+            end
+            if err == "closed" then
+               break
+            end
+         end
+         dskt:close()
+         local coro = remove_waiting_coro(id)
+         if coro then
+            copas.wakeup(coro)
+         end
+      end)
+   end
+
+   function add_waiting_coro(id, coro)
+      local empty = not next(waiting)
+      waiting[id] = coro
+      if empty then
+         launch_wakeup_server()
+      end
    end
 end
 
