@@ -16,7 +16,7 @@ description = {
 dependencies = {
    "lua >= 5.1",
    "lanes >= 3.10.0",
-   "copas >= 2.0.1",
+   "copas >= 2.0.2",
 }
 
 build = {

@@ -53,9 +53,7 @@ local function launch_wakeup_server()
       local coro = waiting[id]
       waiting[id] = nil
       if not next(waiting) then
-         -- HACK to stop copas.removeserver() from calling wskt:close()
-         local proxy = setmetatable({ socket = wskt, close = function() end }, getmetatable(copas.wrap(wskt)))
-         copas.removeserver(proxy)
+         copas.removeserver(wskt, true) -- keep the server socket open
       end
       if coro then
          copas.wakeup(coro)
