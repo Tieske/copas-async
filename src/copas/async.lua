@@ -12,7 +12,7 @@ local pack, unpack do -- pack/unpack to create/honour the .n field for nil-safet
    function pack (...) return { n = select('#', ...), ...} end
    function unpack(t, i, j) return _unpack(t, i or 1, j or t.n or #t) end
  end
- 
+
 local function normalize_exit(ret, typ, cod)
    if type(ret) == "number" then
       if ret == 0 then
@@ -76,7 +76,7 @@ local function awake_future(ch, ch_id, ...)
    ch:send(ch_id, pack(...))
    local cskt = socket.tcp()
    local ok = cskt:connect(whost, wport)
-   if ok then 
+   if ok then
       cskt:send(tostring(ch))
    end
    cskt:close()
@@ -151,7 +151,7 @@ end
 
 function async.channel()
    local ch = lanes.linda()
-   
+
    local receive_operation = function(self, op)
       if self.accessing then
          error("Concurrent access to channel.")
@@ -162,7 +162,7 @@ function async.channel()
       self.accessing = false
       return unpack(res)
    end
-   
+
    return {
       send = function(_, ...)
          awake_future(ch, "data", ...)
@@ -174,7 +174,7 @@ end
 
 function async.io_popen(command, mode)
    local ch = lanes.linda()
-   
+
    async.addthread(function()
       local fd, err = io.popen(command, mode)
       if not fd then
@@ -191,7 +191,7 @@ function async.io_popen(command, mode)
       end
       fd:close()
    end)
-   
+
    local function operation(valid_mode, errormsg_on_invalid)
       return function(_, arg)
          if mode ~= valid_mode then
