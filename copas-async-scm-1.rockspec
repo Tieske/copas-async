@@ -1,9 +1,17 @@
+local package_name = "copas-async"
+local package_version = "scm"
+local rockspec_revision = "1"
+local github_account_name = "hishamhm"
+local github_repo_name = "copas-async"
 
-package = "Copas-Async"
-version = "scm-1"
+
+package = package_name
+version = package_version.."-"..rockspec_revision
 
 source = {
-   url = "git+https://github.com/hishamhm/copas-async",
+   url = "git+https://github.com/"..github_account_name.."/"..github_repo_name..".git",
+   branch = (package_version == "scm") and "master" or nil,
+   tag = (package_version ~= "scm") and ("v"..package_version) or nil,
 }
 
 description = {
@@ -11,6 +19,8 @@ description = {
    detailed = [[
       Copas-friendly true asynchronous threads, powered by Lua Lanes.
    ]],
+   license = "MIT",
+   homepage = "https://github.com/"..github_account_name.."/"..github_repo_name,
 }
 
 dependencies = {
@@ -21,7 +31,13 @@ dependencies = {
 
 build = {
    type = "builtin",
+
    modules = {
       ["copas.async"] = "src/copas/async.lua",
    },
+
+   copy_directories = {
+      "docs",
+   },
 }
+
