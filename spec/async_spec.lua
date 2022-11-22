@@ -1,3 +1,4 @@
+local load = loadstring or load -- load is Lua 5.2+, loadstring is 5.1
 
 describe("copas-async", function()
 
@@ -77,11 +78,11 @@ describe("copas-async", function()
       it("waiting for future:get()", function()
          local result = {}
          copas(function()
-            local future = async.addthread(function()
+            local future = async.addthread(assert(load([[
                local socket = require "socket"
                socket.sleep(3)
                return "hello", "world"
-            end)
+            ]])))
             local starttime = socket.gettime()
             result.returned = { future:get() }
             result.duration = socket.gettime() - starttime
@@ -95,9 +96,9 @@ describe("copas-async", function()
       it("calling future:get() after it's done", function()
          local result = {}
          copas(function()
-            local future = async.addthread(function()
+            local future = async.addthread(assert(load([[
                return "hello", "world"
-            end)
+            ]])))
             copas.sleep(3)
             result = { future:get() }
             done()
@@ -109,11 +110,11 @@ describe("copas-async", function()
       it("waiting for future:try()", function()
          local result = {}
          copas(function()
-            local future = async.addthread(function()
+            local future = async.addthread(assert(load([[
                local socket = require "socket"
                socket.sleep(3)
                return "hello", "world"
-            end)
+            ]])))
             copas.sleep(0.5)
             for i = 1, 4 do
                result[#result+1] = { future:try() }
@@ -128,9 +129,9 @@ describe("copas-async", function()
       it("calling future:try() after it's done", function()
          local result = {}
          copas(function()
-            local future = async.addthread(function()
+            local future = async.addthread(assert(load([[
                return "hello", "world"
-            end)
+            ]])))
             copas.sleep(3)
             result = { future:try() }
             done()
@@ -142,11 +143,11 @@ describe("copas-async", function()
       it("cocurrent access to future errors", function()
          local result = {}
          copas(function()
-            local future = async.addthread(function()
+            local future = async.addthread(assert(load([[
                local socket = require "socket"
                socket.sleep(3)
                return "hello", "world"
-            end)
+            ]])))
             copas.addthread(function()
                result.success = { future:get() }
                done()
@@ -176,9 +177,13 @@ describe("copas-async", function()
             r, t, c = async.os_execute("sleep 1")
             done()
          end)
-         assert.same(true, r)
-         assert.same("exit", t)
-         assert.same(0, c)
+         if _VERSION == "Lua 5.1" then
+            assert(r == 0 or r == true, "expected the result code to be 0 or 'true'")
+         else
+            assert.same(true, r)
+            assert.same("exit", t)
+            assert.same(0, c)
+         end
       end)
 
 
@@ -188,9 +193,13 @@ describe("copas-async", function()
             r, t, c = async.os_execute("sleep 1; exit 123")
             done()
          end)
-         assert.same(nil, r)
-         assert.same("exit", t)
-         assert.same(123, c)
+         if _VERSION == "Lua 5.1" then
+            assert.not_equal(0, r)
+         else
+            assert.same(nil, r)
+            assert.same("exit", t)
+            assert.same(123, c)
+         end
       end)
 
    end) -- os_execute
@@ -208,10 +217,15 @@ describe("copas-async", function()
             result.exit = { fd:close() }
             done()
          end)
-         assert.same({
-            read = { "1\n2\n3\n4\n" },
-            exit = { true, "exit", 0 },
-         }, result)
+         if _VERSION == "Lua 5.1" then
+            assert.same({ "1\n2\n3\n4\n" }, result.read)
+            assert.is_true(result.exit[1])
+         else
+            assert.same({
+               read = { "1\n2\n3\n4\n" },
+               exit = { true, "exit", 0 },
+            }, result)
+         end
       end)
 
 
@@ -226,30 +240,43 @@ describe("copas-async", function()
             result.exit = { fd:close() }
             done()
          end)
-         assert.same({
-            read = { "1", "2", "3", "4" },
-            exit = { true, "exit", 0 },
-         }, result)
+         if _VERSION == "Lua 5.1" then
+            assert.same({ "1", "2", "3", "4" }, result.read)
+            assert.is_true(result.exit[1])
+         else
+            assert.same({
+               read = { "1", "2", "3", "4" },
+               exit = { true, "exit", 0 },
+            }, result)
+         end
       end)
 
 
-      it("Read using fd:lines()", function()
-         local result = {}
-         copas(function()
-            local fd = async.io_popen("for x in 1 2 3 4 ; do echo $x; done")
-            result.read = {}
-            for line in fd:lines() do
-               result.read[#result.read+1] = line
+      if _VERSION == "Lua 5.1" and not jit then
+         pending("Read using fd:lines(): not supported on PuC Rio Lua 5.1", function() end)
+      else
+         it("Read using fd:lines()", function()
+            local result = {}
+            copas(function()
+               local fd = async.io_popen("for x in 1 2 3 4 ; do echo $x; done")
+               result.read = {}
+               for line in fd:lines() do
+                  result.read[#result.read+1] = line
+               end
+               result.exit = { fd:close() }
+               done()
+            end)
+            if _VERSION == "Lua 5.1" then
+               assert.same({ "1", "2", "3", "4" }, result.read)
+               assert.is_true(result.exit[1])
+            else
+               assert.same({
+                  read = { "1", "2", "3", "4" },
+                  exit = { true, "exit", 0 },
+               }, result)
             end
-            result.exit = { fd:close() }
-            done()
          end)
-         assert.same({
-            read = { "1", "2", "3", "4" },
-            exit = { true, "exit", 0 },
-         }, result)
-      end)
-
+      end
 
       it("closing while incomplete", function()
          local result = {}
@@ -263,10 +290,15 @@ describe("copas-async", function()
             -- entire command exited
             done()
          end)
-         assert.same({
-            read = { "1" },
-            exit = { true, "exit", 0 },
-         }, result)
+         if _VERSION == "Lua 5.1" then
+            assert.same({ "1" }, result.read)
+            assert.is_true(result.exit[1])
+         else
+            assert.same({
+               read = { "1" },
+               exit = { true, "exit", 0 },
+            }, result)
+         end
       end)
 
    end) -- io_popen
