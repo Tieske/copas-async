@@ -35,3 +35,29 @@ end)
 
 copas.loop()
 
+--[[ produces:
+
+    coroutine A says 1
+    thread says hello 1
+    coroutine A says 2
+    coroutine B will try to get thread value
+    coroutine B didn't get a value because thread is not done!
+    coroutine B will wait for thread value...
+    thread says hello 2
+    coroutine A says 3
+    thread says hello 3
+    coroutine A says 4
+    thread says hello 4
+    coroutine A says 5
+    thread says hello 5
+    coroutine A says 6
+    coroutine B got value from thread:123
+    coroutine A says 7
+    coroutine A says 8
+    coroutine B slept a bit:   nil    exit    12
+    DONE B
+    coroutine A says 9
+    coroutine A says 10
+    DONE A
+
+]]

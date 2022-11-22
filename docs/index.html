@@ -1,0 +1,304 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<head>
+    <title>Copas Async</title>
+    <link rel="stylesheet" href="ldoc.css" type="text/css" />
+</head>
+<body>
+
+<div id="container">
+
+<div id="product">
+	<div id="product_logo"></div>
+	<div id="product_name"><big><b></b></big></div>
+	<div id="product_description"></div>
+</div> <!-- id="product" -->
+
+
+<div id="main">
+
+
+<!-- Menu -->
+
+<div id="navigation">
+<br/>
+<h1>copas-async</h1>
+
+
+
+<h2>Contents</h2>
+<ul>
+<li><a href="#Class_future">Class future </a></li>
+<li><a href="#Async_module">Async module </a></li>
+</ul>
+
+
+<h2>Modules</h2>
+<ul class="nowrap">
+  <li><strong>copas-async</strong></li>
+</ul>
+<h2>Topics</h2>
+<ul class="">
+  <li><a href="topics/01-introduction.md.html">1. Introduction</a></li>
+  <li><a href="topics/CHANGELOG.md.html">CHANGELOG</a></li>
+  <li><a href="topics/LICENSE.md.html">LICENSE</a></li>
+</ul>
+<h2>Examples</h2>
+<ul class="nowrap">
+  <li><a href="examples/example-popen.lua.html">example-popen.lua</a></li>
+  <li><a href="examples/example.lua.html">example.lua</a></li>
+</ul>
+
+</div>
+
+<div id="content">
+
+<h1>Module <code>copas-async</code></h1>
+<p>Copas-friendly true asynchronous threads, powered by Lua Lanes.</p>
+<p> When loaded this module will initialize LuaLanes by calling
+ <code>lanes.configure()</code> without arguments. If you don't want/need that, then
+ call <code>lanes.configure</code> before loading/requiring this module.</p>
+    <h3>Info:</h3>
+    <ul>
+        <li><strong>Copyright</strong>: Copyright (c) 2016 Hisham Muhammad</li>
+        <li><strong>License</strong>: MIT, see <a href="topics/LICENSE.md.html#">LICENSE.md</a>.</li>
+        <li><strong>Author</strong>: Hisham Muhammad</li>
+    </ul>
+
+
+<h2><a href="#Class_future">Class future </a></h2>
+<table class="function_list">
+	<tr>
+	<td class="name" nowrap><a href="#future:get">future:get ()</a></td>
+	<td class="summary">Waits until the async thread finishes (without locking other Copas coroutines) and
+ obtains the result values of the async thread function.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#future:try">future:try ()</a></td>
+	<td class="summary">Obtains the result value of the async thread function if it is already available,
+ or returns <code>false</code> if it is still running.</td>
+	</tr>
+</table>
+<h2><a href="#Async_module">Async module </a></h2>
+<table class="function_list">
+	<tr>
+	<td class="name" nowrap><a href="#async.addthread">async.addthread (fn)</a></td>
+	<td class="summary">Runs a function in its own thread, and returns a <a href="index.html#future">future</a>.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#async.io_popen">async.io_popen (command, mode)</a></td>
+	<td class="summary">Convenience function that runs <code>io.popen(command, mode)</code> in its own async thread.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#async.os_execute">async.os_execute (command)</a></td>
+	<td class="summary">Convenience function that runs an os command in its own async thread.</td>
+	</tr>
+</table>
+
+<br/>
+<br/>
+
+
+    <h2 class="section-header has-description"><a name="Class_future"></a>Class future </h2>
+
+          <div class="section-description">
+          An object that can be queried later to obtain the result of an async function.
+ See <a href="index.html#async.addthread">async.addthread</a>.
+          </div>
+    <dl class="function">
+    <dt>
+    <a name = "future:get"></a>
+    <strong>future:get ()</strong>
+    </dt>
+    <dd>
+    Waits until the async thread finishes (without locking other Copas coroutines) and
+ obtains the result values of the async thread function. </p>
+
+<p> Calling on the future object is a shortcut to this <a href="index.html#future:get">get</a> method.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+        ... the async function results
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> msg = <span class="string">"hello"</span>
+copas(<span class="keyword">function</span>()
+   <span class="comment">-- schedule a thread using LuaLanes
+</span>   <span class="keyword">local</span> future = async.addthread(<span class="keyword">function</span>()
+      <span class="global">os</span>.execute(<span class="string">"for i in seq 5; do echo 'thread says "</span>..msg..<span class="string">" '$i; sleep 1; done"</span>)
+      <span class="keyword">return</span> <span class="number">123</span>
+   <span class="keyword">end</span>)
+
+   <span class="comment">-- The following will wait for the thread to complete (5 secs)
+</span>   <span class="comment">-- Note: calling <code>future()</code> is the same as <code>future:get()</code>
+</span>   <span class="global">assert</span>(<span class="number">123</span> == future(), <span class="string">"expected exit code 123"</span>)
+<span class="keyword">end</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "future:try"></a>
+    <strong>future:try ()</strong>
+    </dt>
+    <dd>
+    Obtains the result value of the async thread function if it is already available,
+ or returns <code>false</code> if it is still running.  This function always returns immediately.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+        <code>true + ...</code> (the async function results) when complete, or <code>false</code> if not yet available
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> msg = <span class="string">"hello"</span>
+copas(<span class="keyword">function</span>()
+   <span class="comment">-- schedule a thread using LuaLanes
+</span>   <span class="keyword">local</span> future = async.addthread(<span class="keyword">function</span>()
+      <span class="global">os</span>.execute(<span class="string">"for i in seq 5; do echo 'thread says "</span>..msg..<span class="string">" '$i; sleep 1; done"</span>)
+      <span class="keyword">return</span> <span class="number">123</span>
+   <span class="keyword">end</span>)
+
+   <span class="comment">-- loop to wait for result
+</span>   <span class="keyword">local</span> done, result
+   <span class="keyword">while</span> <span class="keyword">not</span> done <span class="keyword">do</span>
+      copas.sleep(<span class="number">0.1</span>)
+      done, result = future:try()
+   <span class="keyword">end</span>
+
+   <span class="global">assert</span>(<span class="number">123</span> == future(), <span class="string">"expected exit code 123"</span>)
+<span class="keyword">end</span>)</pre>
+    </ul>
+
+</dd>
+</dl>
+    <h2 class="section-header "><a name="Async_module"></a>Async module </h2>
+
+    <dl class="function">
+    <dt>
+    <a name = "async.addthread"></a>
+    <strong>async.addthread (fn)</strong>
+    </dt>
+    <dd>
+    Runs a function in its own thread, and returns a <a href="index.html#future">future</a>. </p>
+
+<p> Note that the function runs it its own Lanes context, so upvalues are
+ copied into the function. When modified in that function, it will not update
+ the original values living Copas side.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">fn</span>
+            <span class="types"><span class="type">function</span></span>
+         the function to execute async
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+        a <a href="index.html#future">future</a>
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "async.io_popen"></a>
+    <strong>async.io_popen (command, mode)</strong>
+    </dt>
+    <dd>
+    Convenience function that runs <code>io.popen(command, mode)</code> in its own async thread.
+ This allows you to easily run long-lived commands in your own coroutine and get
+ their output (async) without affecting the Copas scheduler as a whole.</p>
+
+<p> This function returns (immediately) a descriptor object with an API that matches that of the
+ object returned by <a href="https://www.lua.org/manual/5.1/manual.html#pdf-io.popen">io.popen</a> in Lua 5.3. When commands are issued, this causes
+ the current coroutine to wait until the response is returned, without locking
+ other coroutines (in other words, it uses <a href="index.html#future">future</a> internally). Only the
+ methods <code>fd:read</code>, <code>fd:write</code>, <code>fd:close</code>, and <code>fd:lines</code> are currently supported.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">command</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         The command to pass to <a href="https://www.lua.org/manual/5.1/manual.html#pdf-io.popen">io.popen</a> in the async thread.
+        </li>
+        <li><span class="parameter">mode</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         The mode to pass to <a href="https://www.lua.org/manual/5.1/manual.html#pdf-io.popen">io.popen</a> in the async thread.
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+        descriptor object
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "async.os_execute"></a>
+    <strong>async.os_execute (command)</strong>
+    </dt>
+    <dd>
+    Convenience function that runs an os command in its own async thread.
+ This allows you to easily run long-lived commands in your own coroutine without
+ affecting the Copas scheduler as a whole.</p>
+
+<p> This function causes the current coroutine to wait until the command is finished,
+ without locking other coroutines (in other words, it internally runs <code>get()</code>
+ in its <a href="index.html#future">future</a>).
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">command</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         The command to pass to <a href="https://www.lua.org/manual/5.1/manual.html#pdf-os.execute">os.execute</a> in the async thread.
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+        ok, type, code <a href="https://www.lua.org/manual/5.3/manual.html#pdf-os.execute">same as in <a href="https://www.lua.org/manual/5.1/manual.html#pdf-os.execute">os.execute</a> for Lua 5.3</a>
+ (even when running on Lua 5.1).
+    </ol>
+
+
+
+
+</dd>
+</dl>
+
+
+</div> <!-- id="content" -->
+</div> <!-- id="main" -->
+<div id="about">
+<i>generated by <a href="http://github.com/stevedonovan/LDoc">LDoc 1.4.6</a></i>
+<i style="float:right;">Last updated 2022-11-22 16:06:15 </i>
+</div> <!-- id="about" -->
+</div> <!-- id="container" -->
+</body>
+</html>
