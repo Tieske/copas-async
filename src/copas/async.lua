@@ -262,6 +262,8 @@ end
 -- the current coroutine to wait until the response is returned, without locking
 -- other coroutines (in other words, it uses `future` internally). Only the
 -- methods `fd:read`, `fd:write`, `fd:close`, and `fd:lines` are currently supported.
+-- <br/>Note: `fd:lines` is not supported on PuC Rio Lua 5.1 (yield across C boundary errors
+-- will occur)
 -- @tparam string command The command to pass to `io.popen` in the async thread.
 -- @tparam string mode The mode to pass to `io.popen` in the async thread.
 -- @return descriptor object
