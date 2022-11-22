@@ -27,19 +27,19 @@ local pack, unpack do -- pack/unpack to create/honour the .n field for nil-safet
    function unpack(t, i, j) return _unpack(t, i or 1, j or t.n or #t) end
  end
 
-local function normalize_exit(ret, typ, cod)
-   if type(ret) == "number" then
-      if ret == 0 then
-         return true, "exit", 0
-      elseif ret < 255 then
-         return nil, "signal", ret
-      else
-         return nil, "exit", math.floor(ret / 255)
-      end
-   else
-      return ret, typ, cod
-   end
-end
+-- local function normalize_exit(ret, typ, cod)
+--    if type(ret) == "number" then
+--       if ret == 0 then
+--          return true, "exit", 0
+--       elseif ret < 255 then
+--          return nil, "signal", ret
+--       else
+--          return nil, "exit", math.floor(ret / 255)
+--       end
+--    else
+--       return ret, typ, cod
+--    end
+-- end
 
 local whost, wport
 local add_waiting_coro
@@ -243,13 +243,12 @@ end
 -- without locking other coroutines (in other words, it internally runs `get()`
 -- in its `future`).
 -- @tparam string command The command to pass to `os.execute` in the async thread.
--- @return ok, type, code [same as in `os.execute` for Lua 5.3](https://www.lua.org/manual/5.3/manual.html#pdf-os.execute)
--- (even when running on Lua 5.1).
+-- @return the same as `os.execute` (can differ by platform and Lua version)
 function async.os_execute(command)
    local future = async.addthread(function()
       return os.execute(command)
    end)
-   return normalize_exit(future:get())
+   return future:get() -- normalize_exit(future:get())
 end
 
 
@@ -259,7 +258,7 @@ end
 -- their output (async) without affecting the Copas scheduler as a whole.
 --
 -- This function returns (immediately) a descriptor object with an API that matches that of the
--- object returned by `io.popen` in Lua 5.3. When commands are issued, this causes
+-- object returned by `io.popen`. When commands are issued, this causes
 -- the current coroutine to wait until the response is returned, without locking
 -- other coroutines (in other words, it uses `future` internally). Only the
 -- methods `fd:read`, `fd:write`, `fd:close`, and `fd:lines` are currently supported.
@@ -279,7 +278,8 @@ function async.io_popen(command, mode)
       while true do
          local _, fd_cmd = ch:receive("fd_cmd")
          if fd_cmd == "close" then
-            awake_future(ch, "result", normalize_exit(fd:close()))
+            awake_future(ch, "result", fd:close())
+            -- awake_future(ch, "result", normalize_exit(fd:close()))
             break
          end
          if fd_cmd == nil then
