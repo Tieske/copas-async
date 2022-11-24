@@ -178,7 +178,7 @@ local function new_future(ch, ch_id)
 
       if not future.dead then
          local key, value = ch:receive(0, ch_id)
-         if not key then
+         while not key do
             add_waiting_coro(tostring(ch), coroutine.running())
             copas.sleep(-1)
             key, value = ch:receive(0, ch_id)
