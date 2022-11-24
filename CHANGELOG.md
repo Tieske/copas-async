@@ -9,6 +9,8 @@
 - Fix: `io_popen`; the default read pattern should be "*l" and nil should not
   be passed.
 - Fix: only initialize LuaLanes if not initialized already
+- Added: `io_popen` now also has the `lines` iterator (except for Puc Rio Lua 5.1
+  where it will not work due to c-boundary issues)
 
 ### Version 0.3, released 4-Jul-2016
 

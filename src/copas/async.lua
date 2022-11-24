@@ -252,7 +252,7 @@ end
 -- <br/>Note: `fd:lines` is not supported on PuC Rio Lua 5.1 (yield across C boundary errors
 -- will occur)
 -- @tparam string command The command to pass to `io.popen` in the async thread.
--- @tparam string mode The mode to pass to `io.popen` in the async thread.
+-- @tparam[opt="r"] string mode The mode to pass to `io.popen` in the async thread.
 -- @return descriptor object
 function async.io_popen(command, mode)
    mode = mode or "r"
