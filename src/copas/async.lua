@@ -25,21 +25,8 @@ local pack, unpack do -- pack/unpack to create/honour the .n field for nil-safet
    local _unpack = _G.table.unpack or _G.unpack
    function pack (...) return { n = select('#', ...), ...} end
    function unpack(t, i, j) return _unpack(t, i or 1, j or t.n or #t) end
- end
+end
 
--- local function normalize_exit(ret, typ, cod)
---    if type(ret) == "number" then
---       if ret == 0 then
---          return true, "exit", 0
---       elseif ret < 255 then
---          return nil, "signal", ret
---       else
---          return nil, "exit", math.floor(ret / 255)
---       end
---    else
---       return ret, typ, cod
---    end
--- end
 
 local whost, wport
 local add_waiting_coro
@@ -248,7 +235,7 @@ function async.os_execute(command)
    local future = async.addthread(function()
       return os.execute(command)
    end)
-   return future:get() -- normalize_exit(future:get())
+   return future:get()
 end
 
 
@@ -281,7 +268,6 @@ function async.io_popen(command, mode)
          local _, fd_cmd = ch:receive("fd_cmd")
          if fd_cmd == "close" then
             awake_future(ch, "result", fd:close())
-            -- awake_future(ch, "result", normalize_exit(fd:close()))
             break
          end
          if fd_cmd == nil then

@@ -2,9 +2,9 @@
 
 ### Version x.x, unreleased
 
-- Breaking: the os_execute return codes are no longer normalized to Lua 5.3 output
-  Since that didn't work due to platform and version differences. Now it just returns
-  the same results as the regular os.execute for this platform/Lua version.
+- Breaking: the `os_execute` return codes are no longer normalized to Lua 5.3 output
+  since that didn't work due to platform and version differences. Now it just returns
+  the same results as the regular `os.execute` for the current platform/Lua version.
 - Fix: `io_popen`; the default mode should be "r"
 - Fix: `io_popen`; the default read pattern should be "*l" and nil should not
   be passed.
