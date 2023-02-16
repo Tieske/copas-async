@@ -10,6 +10,15 @@
 -- @license MIT, see `LICENSE.md`.
 -- @name copas-async
 -- @class module
+-- @usage
+-- local async = require "copas.async"
+--
+-- local function sometask()
+--   -- do something that takes a while
+--   return ok, err
+-- end
+--
+-- local ok, err = async(sometask)
 
 local async = {}
 
@@ -222,6 +231,25 @@ end
 
 
 
+--- Runs a function in its own thread, and waits for the results.
+-- This will block the current thread, but will not block other Copas threads.
+-- @tparam function fn the function to execute async
+-- @return the original functions return values
+-- @usage -- assuming a function returning a value or nil+error, normally called like this;
+-- --
+-- --   local result, err = fn()
+-- --
+-- -- Can be called non-blocking like this:
+--
+-- local result, err = async.run(fn)
+-- -- or even shorter;
+-- local result, err = async(fn)
+function async.run(fn)
+   return async.addthread(fn):get()
+end
+
+
+
 --- Convenience function that runs an os command in its own async thread.
 -- This allows you to easily run long-lived commands in your own coroutine without
 -- affecting the Copas scheduler as a whole.
@@ -229,13 +257,12 @@ end
 -- This function causes the current coroutine to wait until the command is finished,
 -- without locking other coroutines (in other words, it internally runs `get()`
 -- in its `future`).
--- @tparam string command The command to pass to `os.execute` in the async thread.
+-- @tparam string command The command to pass to `os.execute` in the async thread
 -- @return the same as `os.execute` (can differ by platform and Lua version)
 function async.os_execute(command)
-   local future = async.addthread(function()
+   return async.run(function()
       return os.execute(command)
    end)
-   return future:get()
 end
 
 
@@ -251,8 +278,8 @@ end
 -- methods `fd:read`, `fd:write`, `fd:close`, and `fd:lines` are currently supported.
 -- <br/>Note: `fd:lines` is not supported on PuC Rio Lua 5.1 (yield across C boundary errors
 -- will occur)
--- @tparam string command The command to pass to `io.popen` in the async thread.
--- @tparam[opt="r"] string mode The mode to pass to `io.popen` in the async thread.
+-- @tparam string command The command to pass to `io.popen` in the async thread
+-- @tparam[opt="r"] string mode The mode to pass to `io.popen` in the async thread
 -- @return descriptor object
 function async.io_popen(command, mode)
    mode = mode or "r"
@@ -319,4 +346,10 @@ function async.io_popen(command, mode)
    }
 end
 
-return async
+
+
+return setmetatable(async, {
+   __call = function(self, ...)
+      return async.run(...)
+   end
+})
