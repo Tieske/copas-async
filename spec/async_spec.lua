@@ -1,71 +1,17 @@
 local load = loadstring or load -- load is Lua 5.2+, loadstring is 5.1
 
+local defTimeout = 20
+local copastest = require "spec.copas-busted"
+
 describe("copas-async", function()
 
-   local copas, socket, async
-   local servers_to_remove, tasks_to_cancel, client_sockets_to_close
-   local to_timer, done, timeout
+   local copas, done, settimeout, async, socket
 
    before_each(function()
-      copas = require "copas"
+      copas, done, settimeout = copastest(defTimeout)
       async = require "copas.async"
       socket = require "socket"
-      servers_to_remove = setmetatable({}, {__mode = "v"})
-      tasks_to_cancel = setmetatable({}, {__mode = "v"})
-      client_sockets_to_close = setmetatable({}, {__mode = "v"})
-
-      -- record threads to stop, needed to make copas forcefully exit
-      local _addnamedthread = copas.addnamedthread
-      copas.addnamedthread = function(name, handler, ...)
-         local coro = _addnamedthread(name, handler, ...)
-         tasks_to_cancel[#tasks_to_cancel+1] = coro
-         return coro
-      end
-
-      -- record servers to remove, needed to make copas forcefully exit
-      local _addserver = copas.addserver
-      copas.addserver = function(socket, handler, ...)
-         servers_to_remove[#servers_to_remove+1] = socket
-         local newhandler = function(client, ...)
-            client_sockets_to_close[#client_sockets_to_close+1] = client
-            return handler(client, ...)
-         end
-         return _addserver(socket, newhandler, ...)
-      end
-
-      -- setup timeout timer
-      timeout = false
-      to_timer = require("copas.timer").new {
-         recurring = false,
-         delay = 20,
-         callback = function()
-            done()
-            timeout = true
-         end
-      }
    end)
-
-
-   function done()
-      -- remove servers
-      for k,v in pairs(servers_to_remove) do copas.removeserver(v) end
-      -- close clients
-      for k,v in pairs(client_sockets_to_close) do v:close() end
-      -- cancel tasks
-      for k,v in pairs(tasks_to_cancel) do copas.removethread(v) end
-      -- cancel timeout timer
-      to_timer:cancel()
-      -- clear luasocket and copas packages
-      for k,v in pairs(package.loaded) do
-         if k:match("^copas") or k:match("^socket") then
-            package.loaded[k] = nil
-         end
-      end
-      collectgarbage()
-      collectgarbage()
-      assert(not timeout, "timeout")
-   end
-
 
    after_each(function()
       done()
@@ -76,6 +22,7 @@ describe("copas-async", function()
    describe("futures:", function()
 
       it("waiting for future:get()", function()
+         settimeout(5)
          local result = {}
          copas(function()
             local future = async.addthread(assert(load([[
