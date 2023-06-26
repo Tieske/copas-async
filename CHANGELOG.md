@@ -11,6 +11,8 @@
 - Fix: only initialize LuaLanes if not initialized already
 - Added: `io_popen` now also has the `lines` iterator (except for Puc Rio Lua 5.1
   where it will not work due to c-boundary issues)
+- Added: `run` method, to simply run and wait for an async result while not blocking
+  (this also is the default action when calling on the module table).
 
 ### Version 0.3, released 4-Jul-2016
 
