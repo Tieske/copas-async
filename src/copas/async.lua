@@ -5,7 +5,7 @@
 -- `lanes.configure()` without arguments. If you don't want/need that, then
 -- call `lanes.configure` before loading/requiring this module.
 --
--- @copyright Copyright (c) 2016 Hisham Muhammad
+-- @copyright Copyright (c) 2016 Hisham Muhammad, 2022-2023 Thijs Schreijer
 -- @author Hisham Muhammad
 -- @license MIT, see `LICENSE.md`.
 -- @name copas-async

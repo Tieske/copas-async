@@ -87,7 +87,7 @@ describe("copas-async", function()
       end)
 
 
-      it("cocurrent access to future errors", function()
+      it("concurrent access to future errors", function()
          local result = {}
          copas(function()
             local future = async.addthread(assert(load([[
