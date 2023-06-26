@@ -10,7 +10,8 @@ description = {
       Copas-friendly true asynchronous threads, powered by Lua Lanes.
       Allows launching long-lived external commands without blocking
       the coroutine scheduler.
-   ]]
+   ]],
+   license = "MIT",
 }
 dependencies = {
    "lua >= 5.1",
