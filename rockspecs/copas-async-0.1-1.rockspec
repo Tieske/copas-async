@@ -14,6 +14,7 @@ description = {
       Allows launching long-lived external commands without blocking
       the coroutine scheduler.
    ]],
+   license = "MIT",
 }
 
 dependencies = {

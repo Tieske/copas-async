@@ -1,7 +1,7 @@
 local package_name = "copas-async"
 local package_version = "scm"
 local rockspec_revision = "1"
-local github_account_name = "hishamhm"
+local github_account_name = "Tieske"
 local github_repo_name = "copas-async"
 
 
