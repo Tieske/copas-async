@@ -213,7 +213,7 @@ end
 
 --- Runs a function in its own thread, and returns a `future`.
 --
--- Note that the function runs it its own Lanes context, so upvalues are
+-- Note that the function runs in its own Lanes context, so upvalues are
 -- copied into the function. When modified in that function, it will not update
 -- the original values living Copas side.
 -- @tparam function fn the function to execute async
@@ -255,7 +255,7 @@ end
 -- affecting the Copas scheduler as a whole.
 --
 -- This function causes the current coroutine to wait until the command is finished,
--- without locking other coroutines (in other words, it internally runs `get()`
+-- without blocking other coroutines (in other words, it internally runs `get()`
 -- in its `future`).
 -- @tparam string command The command to pass to `os.execute` in the async thread
 -- @return the same as `os.execute` (can differ by platform and Lua version)
