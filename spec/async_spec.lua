@@ -35,7 +35,7 @@ describe("copas-async", function()
             result.duration = socket.gettime() - starttime
             done()
          end)
-         assert.same({"hello", "world"}, result.returned)
+         assert.same({true, "hello", "world"}, result.returned)
          assert.near(3, 0.1, result.duration)
       end)
 
@@ -50,7 +50,7 @@ describe("copas-async", function()
             result = { future:get() }
             done()
          end)
-         assert.same({"hello", "world"}, result)
+         assert.same({true, "hello", "world"}, result)
       end)
 
 
@@ -69,7 +69,7 @@ describe("copas-async", function()
             end
             done()
          end)
-         assert.same({ {false}, {false}, {false}, {true, "hello", "world"}}, result)
+         assert.same({ {async.PENDING}, {async.PENDING}, {async.PENDING}, {async.SUCCESS, "hello", "world"}}, result)
       end)
 
 
@@ -83,33 +83,32 @@ describe("copas-async", function()
             result = { future:try() }
             done()
          end)
-         assert.same({true, "hello", "world"}, result)
+         assert.same({async.SUCCESS, "hello", "world"}, result)
       end)
 
 
-      it("concurrent access to future errors", function()
+      it("concurrent get() is allowed", function()
          local result = {}
          copas(function()
             local future = async.addthread(assert(load([[
                local socket = require "socket"
-               socket.sleep(3)
+               socket.sleep(1)
                return "hello", "world"
             ]])))
             copas.addthread(function()
-               result.success = { future:get() }
-               done()
+               result[1] = { future:get() }
             end)
-            copas.sleep(0.1) -- ensure the 'get' is in progress
-            copas.addthread(function() -- test future:try
-               result.try = { pcall(future.try, future) }
+            copas.sleep(0.1) -- ensure the first get() is already waiting
+            copas.addthread(function()
+               result[2] = { future:get() }
             end)
-            copas.addthread(function() -- test future:get
-               result.get = { pcall(future.get, future) }
-            end)
+            while not result[1] or not result[2] do
+               copas.sleep(0.1)
+            end
+            done()
          end)
-         assert(result.get[2]:match("concurrent access to future"))
-         assert(result.try[2]:match("concurrent access to future"))
-         assert.same({"hello", "world"}, result.success)
+         assert.same({true, "hello", "world"}, result[1])
+         assert.same({true, "hello", "world"}, result[2])
       end)
 
    end) -- futures
@@ -119,11 +118,12 @@ describe("copas-async", function()
    describe("os_execute:", function()
 
       it("returns the exit code on success", function()
-         local r, t, c
+         local ok, r, t, c
          copas(function()
-            r, t, c = async.os_execute("sleep 1")
+            ok, r, t, c = async.os_execute("sleep 1")
             done()
          end)
+         assert.same(true, ok) -- pcall-style ok flag
          if _VERSION == "Lua 5.1" then
             assert(r == 0 or r == true, "expected the result code to be 0 or 'true'")
          else
@@ -135,11 +135,12 @@ describe("copas-async", function()
 
 
       it("returns the exit code on failure", function()
-         local r, t, c
+         local ok, r, t, c
          copas(function()
-            r, t, c = async.os_execute("sleep 1; exit 123")
+            ok, r, t, c = async.os_execute("sleep 1; exit 123")
             done()
          end)
+         assert.same(true, ok) -- pcall-style ok flag (task ran; os exit code is in r)
          if _VERSION == "Lua 5.1" then
             assert.not_equal(0, r)
          else
