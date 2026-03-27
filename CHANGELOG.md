@@ -25,6 +25,7 @@
 - Breaking: `future:get()` now returns pcall-style: `true` + results on success,
   `false` + errmsg on failure. Previously it returned the results directly and
   raised on error.
+- Deps: bump Copas to 4.10
 - Added: task errors are now captured and returned via `get()`/`try()` instead
   of being silently lost.
 - Added: `future:try()` now returns a 3-state status constant instead of a
