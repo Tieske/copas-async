@@ -53,6 +53,13 @@ local async = {
    SUCCESS = copas.future.SUCCESS,
    PENDING = copas.future.PENDING,
    ERROR   = copas.future.ERROR,
+
+   --- Timeout in seconds before a cancelled lane is force-killed.
+   -- After `future:cancel()` the underlying Lanes thread is soft-cancelled first.
+   -- If it is still running after this many seconds it will be hard-killed
+   -- (`pthread_cancel`). Set to `math.huge` to never force-kill.
+   -- @field async.cancel_timeout
+   cancel_timeout = 5,
 }
 
 local whost, wport
@@ -240,9 +247,23 @@ local function new_future(ch, ch_id, lane)
    --- Cancels the future if the task has not yet completed.
    -- Returns true if cancelled, false if already done.
    -- Any coroutines blocked in `get()` will be released and return false+"cancelled".
+   --
+   -- The underlying Lanes thread is soft-cancelled immediately. If it is still running
+   -- after `async.cancel_timeout` seconds (e.g. blocked inside a C function such as
+   -- `socket.sleep` or `os.execute`), it will be force-killed. The Copas side is
+   -- always cancelled immediately; any result produced by the thread afterwards is
+   -- discarded.
    -- @function future:cancel
    -- @return true if cancelled, false if already done
    function fut:cancel()
+      if not self.results then
+         -- check if the result arrived on the Linda without anyone polling yet
+         local key, value = ch:receive(0, ch_id)
+         if key then
+            self.results = value
+            self.sema:give(self.sema:get_wait())
+         end
+      end
       if self.results then
          return false  -- already done (or already cancelled)
       end
@@ -253,7 +274,18 @@ local function new_future(ch, ch_id, lane)
       end
       self.sema:give(self.sema:get_wait())
       if self.lane then
-         self.lane:cancel(0, true)
+         self.lane:cancel()  -- soft cancel; best-effort, the lane may not honour it
+         -- schedule a hard kill after cancel_timeout in case soft cancel was ignored
+         -- (e.g. the thread is blocked inside a C function like socket.sleep)
+         local lane = self.lane
+         copas.timer.new({
+            delay = async.cancel_timeout,
+            callback = function()
+               if lane.status == "running" or lane.status == "waiting" then
+                  pcall(lane.cancel, lane, 0, true)
+               end
+            end,
+         })
       end
       return true
    end

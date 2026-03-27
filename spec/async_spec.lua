@@ -89,6 +89,87 @@ describe("copas-async", function()
       end)
 
 
+      it("cancel() while pending returns true", function()
+         local result = {}
+         copas(function()
+            local future = async.addthread(assert(load([[
+               local socket = require "socket"
+               socket.sleep(5)
+               return "hello"
+            ]])))
+            copas.sleep(0.5) -- let the thread start
+            result.cancel = future:cancel()
+            result.try    = { future:try() }
+            result.get    = { future:get() }
+            done()
+         end)
+         assert.is_true(result.cancel)
+         assert.same({ async.ERROR, "cancelled" }, result.try)
+         assert.same({ false, "cancelled" }, result.get)
+      end)
+
+
+      it("cancel() after done returns false", function()
+         local result = {}
+         copas(function()
+            local future = async.addthread(assert(load([[
+               return "hello"
+            ]])))
+            copas.sleep(1) -- let the thread finish
+            result.cancel = future:cancel()
+            result.get    = { future:get() }
+            done()
+         end)
+         assert.is_false(result.cancel)
+         assert.same({ true, "hello" }, result.get)
+      end)
+
+
+      it("cancel() force-kills the lane after cancel_timeout", function()
+         settimeout(5)
+         local saved_timeout = async.cancel_timeout
+         finally(function()
+            async.cancel_timeout = saved_timeout
+         end)
+         async.cancel_timeout = 1  -- speed up the test
+
+         local lane_status
+         copas(function()
+            local future = async.addthread(assert(load([[
+               local socket = require "socket"
+               socket.sleep(10)  -- long C-level block, soft cancel won't stop it
+            ]])))
+            copas.sleep(0.5)
+            future:cancel()
+            copas.sleep(1.5)  -- wait past cancel_timeout
+            lane_status = future.lane.status
+            done()
+         end)
+         assert.are_equal("cancelled", lane_status)
+      end)
+
+
+      it("cancel() releases a coroutine blocked in get()", function()
+         local result = {}
+         copas(function()
+            local future = async.addthread(assert(load([[
+               local socket = require "socket"
+               socket.sleep(5)
+               return "hello"
+            ]])))
+            copas.addthread(function()
+               result.get = { future:get() }
+            end)
+            copas.sleep(0.5) -- ensure the get() coroutine is already waiting
+            result.cancel = future:cancel()
+            copas.sleep(0.5) -- let the woken coroutine run
+            done()
+         end)
+         assert.is_true(result.cancel)
+         assert.same({ false, "cancelled" }, result.get)
+      end)
+
+
       it("concurrent get() is allowed", function()
          local result = {}
          copas(function()
