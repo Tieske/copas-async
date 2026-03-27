@@ -57,6 +57,7 @@ local async = {
 
 local whost, wport
 local add_waiting_coro
+local remove_waiting_coro
 
 do -- wakeup server
    local waiting = {}
@@ -65,7 +66,7 @@ do -- wakeup server
    whost, wport = wskt:getsockname()
    wport = tonumber(wport)
 
-   local function remove_waiting_coro(id)
+   remove_waiting_coro = function(id)
       local coro = waiting[id]
       waiting[id] = nil
       if not next(waiting) then
@@ -133,11 +134,13 @@ end
 -- @type future
 -- @tparam linda ch the linda to operate on
 -- @param ch_id, the linda key to look for ("done", "data", etc.)
-local function new_future(ch, ch_id)
+-- @param lane the Lanes thread to cancel when `future:cancel()` is called
+local function new_future(ch, ch_id, lane)
    local fut = {
       results = nil, -- packed results: first value is ok-flag (true/false), then the actual values
       sema = copas.semaphore.new(9999, 0, math.huge),
       waiting = false, -- true once a coroutine has registered with the wakeup server
+      lane = lane,
    }
 
    --- Obtains the result value of the async thread function if it is already available,
@@ -234,6 +237,27 @@ local function new_future(ch, ch_id)
       return unpack(self.results)
    end
 
+   --- Cancels the future if the task has not yet completed.
+   -- Returns true if cancelled, false if already done.
+   -- Any coroutines blocked in `get()` will be released and return false+"cancelled".
+   -- @function future:cancel
+   -- @return true if cancelled, false if already done
+   function fut:cancel()
+      if self.results then
+         return false  -- already done (or already cancelled)
+      end
+      self.results = pack(false, "cancelled")
+      local coro = remove_waiting_coro(tostring(ch))
+      if coro then
+         copas.wakeup(coro)
+      end
+      self.sema:give(self.sema:get_wait())
+      if self.lane then
+         self.lane:cancel(0, true)
+      end
+      return true
+   end
+
    setmetatable(fut, { __call = function(self, ...) return self:get(...) end })
    return fut
 end
@@ -252,7 +276,7 @@ end
 function async.addthread(fn)
    local ch = lanes.linda()
 
-   lanes.gen("*", function()
+   local lane = lanes.gen("*", function()
       local results
       local ok, err = pcall(function()
          results = pack(true, fn())
@@ -263,7 +287,7 @@ function async.addthread(fn)
       awake_future(ch, "done", unpack(results, 1, results.n))
    end)()
 
-   return new_future(ch, "done")
+   return new_future(ch, "done", lane)
 end
 
 
