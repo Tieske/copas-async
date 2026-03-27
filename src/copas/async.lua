@@ -32,6 +32,18 @@ local pack, unpack do -- pack/unpack to create/honour the .n field for nil-safet
    local _unpack = _G.table.unpack or _G.unpack
    function pack (...) return { n = select('#', ...), ...} end
    function unpack(t, i, j) return _unpack(t, i or 1, j or t.n or #t) end
+
+   if _G._TEST then
+      -- In test environments (e.g. busted), _G.unpack may be overridden with a
+      -- non-transferable function. This pure recursive implementation has no external
+      -- upvalues and is safe for Lanes transfer on any Lua version.
+      function unpack(t, i, j)
+         i = i or 1
+         j = j or t.n or #t
+         if i > j then return end
+         return t[i], unpack(t, i + 1, j)
+      end
+   end
 end
 
 

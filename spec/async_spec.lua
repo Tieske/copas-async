@@ -8,12 +8,14 @@ describe("copas-async", function()
    local copas, done, settimeout, async, socket
 
    before_each(function()
+      _G._TEST = true
       copas, done, settimeout = copastest(defTimeout)
       async = require "copas.async"
       socket = require "socket"
    end)
 
    after_each(function()
+      _G._TEST = nil
       done()
    end)
 
