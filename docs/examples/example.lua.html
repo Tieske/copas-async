@@ -29,6 +29,7 @@
 
 
 
+
 <h2>Examples</h2>
 <ul class="nowrap">
   <li><a href="../examples/example-popen.lua.html">example-popen.lua</a></li>
@@ -55,63 +56,62 @@
 <span class="keyword">local</span> copas = <span class="global">require</span>(<span class="string">"copas"</span>)
 <span class="keyword">local</span> async = <span class="global">require</span>(<span class="string">"copas.async"</span>)
 
-copas.addthread(<span class="keyword">function</span>()
+copas.<span class="function-name">addthread</span>(<span class="keyword">function</span>()
    <span class="keyword">for</span> i = <span class="number">1</span>, <span class="number">10</span> <span class="keyword">do</span>
       <span class="global">print</span>(<span class="string">"coroutine A says "</span>, i)
-      copas.sleep(<span class="number">1</span>)
+      copas.<span class="function-name">sleep</span>(<span class="number">1</span>)
    <span class="keyword">end</span>
    <span class="global">print</span>(<span class="string">"DONE A"</span>)
 <span class="keyword">end</span>)
 
 <span class="keyword">local</span> msg = <span class="string">"hello"</span>
 
-<span class="keyword">local</span> future = async.addthread(<span class="keyword">function</span>()
-   <span class="global">os</span>.execute(<span class="string">"for i in `seq 5`; do echo 'thread says "</span>..msg..<span class="string">" '$i; sleep 1; done"</span>)
+<span class="keyword">local</span> future = async.<span class="function-name">addthread</span>(<span class="keyword">function</span>()
+   <span class="global">os</span>.<span class="function-name">execute</span>(<span class="string">"for i in `seq 5`; do echo 'thread says "</span>..msg..<span class="string">" '$i; sleep 1; done"</span>)
    <span class="keyword">return</span> <span class="number">123</span>
 <span class="keyword">end</span>)
 
-copas.addthread(<span class="keyword">function</span>()
-   copas.sleep(<span class="number">2</span>)
+copas.<span class="function-name">addthread</span>(<span class="keyword">function</span>()
+   copas.<span class="function-name">sleep</span>(<span class="number">2</span>)
    msg = <span class="string">"world"</span> <span class="comment">-- this will not affect the async thread
 </span>   <span class="global">print</span>(<span class="string">"coroutine B will try to get thread value:"</span>)
-   <span class="keyword">local</span> val = future:try()
+   <span class="keyword">local</span> val = future:<span class="function-name">try</span>()
    <span class="keyword">if</span> <span class="keyword">not</span> val <span class="keyword">then</span>
       <span class="global">print</span>(<span class="string">"coroutine B didn't get a value because thread is not done!"</span>)
    <span class="keyword">end</span>
    <span class="global">print</span>(<span class="string">"coroutine B will wait for thread value..."</span>)
-   val = future:get()
+   val = future:<span class="function-name">get</span>()
    <span class="global">print</span>(<span class="string">"coroutine B got value from thread:"</span>, val)
-   <span class="keyword">local</span> ret, typ, cod = async.os_execute(<span class="string">"sleep 2; exit 12"</span>)
-   <span class="global">print</span>(<span class="string">"coroutine B slept a bit: "</span>, ret, typ, cod)
+   <span class="keyword">local</span> success, ret, typ, cod = async.<span class="function-name">os_execute</span>(<span class="string">"sleep 2; exit 12"</span>)
+   <span class="global">print</span>(<span class="string">"coroutine B slept a bit: "</span>, success, ret, typ, cod)
    <span class="global">print</span>(<span class="string">"DONE B"</span>)
 <span class="keyword">end</span>)
 
-copas.loop()
+copas.<span class="function-name">loop</span>()
 
 <span class="comment">--[[ produces:
 
-    coroutine A says 1
-    thread says hello 1
-    coroutine A says 2
-    coroutine B will try to get thread value
-    coroutine B didn't get a value because thread is not done!
-    coroutine B will wait for thread value...
-    thread says hello 2
-    coroutine A says 3
-    thread says hello 3
-    coroutine A says 4
-    thread says hello 4
-    coroutine A says 5
-    thread says hello 5
-    coroutine A says 6
-    coroutine B got value from thread:123
-    coroutine A says 7
-    coroutine A says 8
-    coroutine B slept a bit:   nil    exit    12
-    DONE B
-    coroutine A says 9
-    coroutine A says 10
-    DONE A
+      thread says hello 1
+      coroutine A says        2
+      thread says hello 2
+      coroutine B will try to get thread value:
+      coroutine B didn't get a value because thread is not done!
+      coroutine B will wait for thread value...
+      coroutine A says        3
+      thread says hello 3
+      coroutine A says        4
+      thread says hello 4
+      coroutine A says        5
+      thread says hello 5
+      coroutine A says        6
+      coroutine B got value from thread:      true
+      coroutine A says        7
+      coroutine A says        8
+      coroutine B slept a bit:        true    nil     exit    12
+      DONE B
+      coroutine A says        9
+      coroutine A says        10
+      DONE A
 
 ]]</span></pre>
 
@@ -119,8 +119,8 @@ copas.loop()
 </div> <!-- id="content" -->
 </div> <!-- id="main" -->
 <div id="about">
-<i>generated by <a href="http://github.com/stevedonovan/LDoc">LDoc 1.4.6</a></i>
-<i style="float:right;">Last updated 2023-06-26 20:07:05 </i>
+<i>generated by <a href="http://github.com/lunarmodules/LDoc">LDoc 1.5.0</a></i>
+<i style="float:right;">Last updated 2026-03-27 19:04:01 </i>
 </div> <!-- id="about" -->
 </div> <!-- id="container" -->
 </body>

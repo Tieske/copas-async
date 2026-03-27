@@ -19,7 +19,7 @@
   `luarocks install copas-async`
 
 
-### Version 2.0.0, released (unreleased)
+### Version 2.0.0, released (27-Mar-2026)
 
 - Breaking: The future interface now matches the Copas future interface.
 - Breaking: `future:get()` now returns pcall-style: `true` + results on success,
