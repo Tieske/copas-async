@@ -20,8 +20,6 @@
 --
 -- local ok, err = async(sometask)
 
-local async = {}
-
 local lanes = require("lanes")
 local copas = require("copas")
 local socket = require("socket")
@@ -34,11 +32,39 @@ local pack, unpack do -- pack/unpack to create/honour the .n field for nil-safet
    local _unpack = _G.table.unpack or _G.unpack
    function pack (...) return { n = select('#', ...), ...} end
    function unpack(t, i, j) return _unpack(t, i or 1, j or t.n or #t) end
+
+   if _G._TEST then
+      -- In test environments (e.g. busted), _G.unpack may be overridden with a
+      -- non-transferable function. This pure recursive implementation has no external
+      -- upvalues and is safe for Lanes transfer on any Lua version.
+      function unpack(t, i, j)
+         i = i or 1
+         j = j or t.n or #t
+         if i > j then return end
+         return t[i], unpack(t, i + 1, j)
+      end
+   end
 end
 
 
+-- Module table
+local async = {
+   -- Status constants (matching copas.future)
+   SUCCESS = copas.future.SUCCESS,
+   PENDING = copas.future.PENDING,
+   ERROR   = copas.future.ERROR,
+
+   --- Timeout in seconds before a cancelled lane is force-killed.
+   -- After `future:cancel()` the underlying Lanes thread is soft-cancelled first.
+   -- If it is still running after this many seconds it will be hard-killed
+   -- (`pthread_cancel`). Set to `math.huge` to never force-kill.
+   -- @field async.cancel_timeout
+   cancel_timeout = 5,
+}
+
 local whost, wport
 local add_waiting_coro
+local remove_waiting_coro
 
 do -- wakeup server
    local waiting = {}
@@ -47,7 +73,7 @@ do -- wakeup server
    whost, wport = wskt:getsockname()
    wport = tonumber(wport)
 
-   local function remove_waiting_coro(id)
+   remove_waiting_coro = function(id)
       local coro = waiting[id]
       waiting[id] = nil
       if not next(waiting) then
@@ -97,7 +123,7 @@ end
 -- The wakeup server (in the copas environment), will find the appropriate coroutine and resume it.
 -- @param ch the Lanes Linda object
 -- @param ch_id "done", "data", "result", etc.
--- @param ... the data to be packed and send over the linda
+-- @param ... the data to be packed and send over the linda (first value is the ok flag)
 -- @return nothing
 local function awake_future(ch, ch_id, ...)
    local socket = require("socket")
@@ -115,19 +141,21 @@ end
 -- @type future
 -- @tparam linda ch the linda to operate on
 -- @param ch_id, the linda key to look for ("done", "data", etc.)
-local function new_future(ch, ch_id)
-   local future = {
-      res = nil,     -- will hold the packed results of the function call
-      getting = nil, -- lock; to prevent concurrent access
-      dead = false,  -- if truthy, the function is done
+-- @param lane the Lanes thread to cancel when `future:cancel()` is called
+local function new_future(ch, ch_id, lane)
+   local fut = {
+      results = nil, -- packed results: first value is ok-flag (true/false), then the actual values
+      sema = copas.semaphore.new(9999, 0, math.huge),
+      waiting = false, -- true once a coroutine has registered with the wakeup server
+      lane = lane,
    }
 
-
-
    --- Obtains the result value of the async thread function if it is already available,
-   -- or returns `false` if it is still running. This function always returns immediately.
+   -- or returns `async.PENDING` if it is still running. This function always returns immediately.
    -- @function future:try
-   -- @return `true + ...` (the async function results) when complete, or `false` if not yet available
+   -- @return `async.PENDING` (false) when still running
+   -- @return `async.SUCCESS` (true) + results when complete
+   -- @return `async.ERROR` ("error") + errmsg when the task failed
    -- @usage
    -- local msg = "hello"
    -- copas(function()
@@ -144,31 +172,38 @@ local function new_future(ch, ch_id)
    --       done, result = future:try()
    --    end
    --
-   --    assert(123 == future(), "expected exit code 123")
+   --    if done == async.ERROR then
+   --       print("oops... something went wrong: " .. result)
+   --    else
+   --       assert(123 == result, "expected exit code 123")
+   --    end
    -- end)
-   future.try = function()
-      assert(not future.getting, "concurrent access to future")
-
-      if not future.res then
+   function fut:try()
+      if not self.results then
          local key, value = ch:receive(0, ch_id)
          if key then
-            future.res = value
-            future.dead = true
+            self.results = value
+            self.sema:give(self.sema:get_wait())
          end
       end
 
-      if future.res then
-         return future.dead, unpack(future.res)
+      if not self.results then
+         return async.PENDING
       end
-      return future.dead
+      if self.results[1] then
+         return async.SUCCESS, unpack(self.results, 2)
+      else
+         return async.ERROR, self.results[2]
+      end
    end
 
    --- Waits until the async thread finishes (without locking other Copas coroutines) and
    -- obtains the result values of the async thread function.
    --
    -- Calling on the future object is a shortcut to this `get` method.
+   -- Multiple coroutines may call `get` concurrently; all will be released when the result arrives.
    -- @function future:get
-   -- @return ... the async function results
+   -- @return like pcall: true + results on success, false + errmsg on error
    -- @usage
    -- local msg = "hello"
    -- copas(function()
@@ -180,31 +215,83 @@ local function new_future(ch, ch_id)
    --
    --    -- The following will wait for the thread to complete (5 secs)
    --    -- Note: calling `future()` is the same as `future:get()`
-   --    assert(123 == future(), "expected exit code 123")
+   --    local ok, result = future()
+   --    assert(ok and 123 == result, "expected exit code 123")
    -- end)
-   future.get = function()
-      future.getting = assert(not future.getting, "concurrent access to future")
-
-      if not future.dead then
-         local key, value = ch:receive(0, ch_id)
-         while not key do
-            add_waiting_coro(tostring(ch), coroutine.running())
-            copas.sleep(-1)
-            key, value = ch:receive(0, ch_id)
+   function fut:get()
+      if not self.results then
+         if not self.waiting then
+            -- First caller: do the actual waiting via the wakeup server mechanism
+            self.waiting = true
+            local key, value = ch:receive(0, ch_id)
+            if key then
+               self.results = value
+            else
+               add_waiting_coro(tostring(ch), coroutine.running())
+               copas.pauseforever()
+               -- try() may have already stored the result while we were sleeping
+               if not self.results then
+                  key, value = ch:receive(0, ch_id)
+                  if key then self.results = value end
+               end
+            end
+            self.sema:give(self.sema:get_wait()) -- release any concurrent waiters
+         else
+            -- Subsequent callers: wait for the first caller to receive and release
+            self.sema:take(1, math.huge)
          end
-         if key then
-            future.res = value
-         end
-         future.dead = true
       end
-
-      future.getting = false
-      if future.res then
-         return unpack(future.res)
-      end
+      return unpack(self.results)
    end
-   setmetatable(future, { __call = future.get })
-   return future
+
+   --- Cancels the future if the task has not yet completed.
+   -- Returns true if cancelled, false if already done.
+   -- Any coroutines blocked in `get()` will be released and return false+"cancelled".
+   --
+   -- The underlying Lanes thread is soft-cancelled immediately. If it is still running
+   -- after `async.cancel_timeout` seconds (e.g. blocked inside a C function such as
+   -- `socket.sleep` or `os.execute`), it will be force-killed. The Copas side is
+   -- always cancelled immediately; any result produced by the thread afterwards is
+   -- discarded.
+   -- @function future:cancel
+   -- @return true if cancelled, false if already done
+   function fut:cancel()
+      if not self.results then
+         -- check if the result arrived on the Linda without anyone polling yet
+         local key, value = ch:receive(0, ch_id)
+         if key then
+            self.results = value
+            self.sema:give(self.sema:get_wait())
+         end
+      end
+      if self.results then
+         return false  -- already done (or already cancelled)
+      end
+      self.results = pack(false, "cancelled")
+      local coro = remove_waiting_coro(tostring(ch))
+      if coro then
+         copas.wakeup(coro)
+      end
+      self.sema:give(self.sema:get_wait())
+      if self.lane then
+         self.lane:cancel()  -- soft cancel; best-effort, the lane may not honour it
+         -- schedule a hard kill after cancel_timeout in case soft cancel was ignored
+         -- (e.g. the thread is blocked inside a C function like socket.sleep)
+         local lane = self.lane
+         copas.timer.new({
+            delay = async.cancel_timeout,
+            callback = function()
+               if lane.status == "running" or lane.status == "waiting" then
+                  pcall(lane.cancel, lane, 0, true)
+               end
+            end,
+         })
+      end
+      return true
+   end
+
+   setmetatable(fut, { __call = function(self, ...) return self:get(...) end })
+   return fut
 end
 
 
@@ -221,29 +308,36 @@ end
 function async.addthread(fn)
    local ch = lanes.linda()
 
-   lanes.gen("*", function()
-      -- FIXME PCALL TEST
-      awake_future(ch, "done", fn())
+   local lane = lanes.gen("*", function()
+      local results
+      local ok, err = pcall(function()
+         results = pack(true, fn())
+      end)
+      if not ok then
+         results = pack(false, err)
+      end
+      awake_future(ch, "done", unpack(results, 1, results.n))
    end)()
 
-   return new_future(ch, "done")
+   return new_future(ch, "done", lane)
 end
 
 
 
 --- Runs a function in its own thread, and waits for the results.
 -- This will block the current thread, but will not block other Copas threads.
+-- Returns like pcall: true + results on success, false + errmsg on error.
 -- @tparam function fn the function to execute async
--- @return the original functions return values
+-- @return true + the function's return values, or false + errmsg
 -- @usage -- assuming a function returning a value or nil+error, normally called like this;
 -- --
 -- --   local result, err = fn()
 -- --
 -- -- Can be called non-blocking like this:
 --
--- local result, err = async.run(fn)
+-- local ok, result, err = async.run(fn)
 -- -- or even shorter;
--- local result, err = async(fn)
+-- local ok, result, err = async(fn)
 function async.run(fn)
    return async.addthread(fn):get()
 end
@@ -258,7 +352,7 @@ end
 -- without blocking other coroutines (in other words, it internally runs `get()`
 -- in its `future`).
 -- @tparam string command The command to pass to `os.execute` in the async thread
--- @return the same as `os.execute` (can differ by platform and Lua version)
+-- @return like pcall: true + os.execute results on success, false + errmsg on error
 function async.os_execute(command)
    return async.run(function()
       return os.execute(command)
@@ -294,15 +388,15 @@ function async.io_popen(command, mode)
       while true do
          local _, fd_cmd = ch:receive("fd_cmd")
          if fd_cmd == "close" then
-            awake_future(ch, "result", fd:close())
+            awake_future(ch, "result", true, fd:close())
             break
          end
          if fd_cmd == nil then
             -- on the C-side of things passing nil is not the same as not
             -- passing anything
-            awake_future(ch, "result", fd[op](fd))
+            awake_future(ch, "result", true, fd[op](fd))
          else
-            awake_future(ch, "result", fd[op](fd, fd_cmd))
+            awake_future(ch, "result", true, fd[op](fd, fd_cmd))
          end
       end
       fd:close()
@@ -315,7 +409,7 @@ function async.io_popen(command, mode)
          end
          local ok = ch:send("fd_cmd", arg)
          if ok == true then
-            return new_future(ch, "result")()
+            return select(2, new_future(ch, "result"):get())
          end
       end
    end
@@ -324,7 +418,7 @@ function async.io_popen(command, mode)
       close = function()
          local ok = ch:send("fd_cmd", "close")
          if ok == true then
-            return new_future(ch, "result")()
+            return select(2, new_future(ch, "result"):get())
          end
       end,
       flush = function()
@@ -351,5 +445,8 @@ end
 return setmetatable(async, {
    __call = function(self, ...)
       return async.run(...)
-   end
+   end,
+   __index = function(_, k)
+      error("unknown field 'async." .. tostring(k) .. "'", 2)
+   end,
 })

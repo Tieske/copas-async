@@ -8,12 +8,14 @@ describe("copas-async", function()
    local copas, done, settimeout, async, socket
 
    before_each(function()
+      _G._TEST = true
       copas, done, settimeout = copastest(defTimeout)
       async = require "copas.async"
       socket = require "socket"
    end)
 
    after_each(function()
+      _G._TEST = nil
       done()
    end)
 
@@ -35,7 +37,7 @@ describe("copas-async", function()
             result.duration = socket.gettime() - starttime
             done()
          end)
-         assert.same({"hello", "world"}, result.returned)
+         assert.same({true, "hello", "world"}, result.returned)
          assert.near(3, 0.1, result.duration)
       end)
 
@@ -50,7 +52,7 @@ describe("copas-async", function()
             result = { future:get() }
             done()
          end)
-         assert.same({"hello", "world"}, result)
+         assert.same({true, "hello", "world"}, result)
       end)
 
 
@@ -69,7 +71,7 @@ describe("copas-async", function()
             end
             done()
          end)
-         assert.same({ {false}, {false}, {false}, {true, "hello", "world"}}, result)
+         assert.same({ {async.PENDING}, {async.PENDING}, {async.PENDING}, {async.SUCCESS, "hello", "world"}}, result)
       end)
 
 
@@ -83,33 +85,113 @@ describe("copas-async", function()
             result = { future:try() }
             done()
          end)
-         assert.same({true, "hello", "world"}, result)
+         assert.same({async.SUCCESS, "hello", "world"}, result)
       end)
 
 
-      it("concurrent access to future errors", function()
+      it("cancel() while pending returns true", function()
          local result = {}
          copas(function()
             local future = async.addthread(assert(load([[
                local socket = require "socket"
-               socket.sleep(3)
+               socket.sleep(5)
+               return "hello"
+            ]])))
+            copas.sleep(0.5) -- let the thread start
+            result.cancel = future:cancel()
+            result.try    = { future:try() }
+            result.get    = { future:get() }
+            done()
+         end)
+         assert.is_true(result.cancel)
+         assert.same({ async.ERROR, "cancelled" }, result.try)
+         assert.same({ false, "cancelled" }, result.get)
+      end)
+
+
+      it("cancel() after done returns false", function()
+         local result = {}
+         copas(function()
+            local future = async.addthread(assert(load([[
+               return "hello"
+            ]])))
+            copas.sleep(1) -- let the thread finish
+            result.cancel = future:cancel()
+            result.get    = { future:get() }
+            done()
+         end)
+         assert.is_false(result.cancel)
+         assert.same({ true, "hello" }, result.get)
+      end)
+
+
+      it("cancel() force-kills the lane after cancel_timeout", function()
+         settimeout(5)
+         local saved_timeout = async.cancel_timeout
+         finally(function()
+            async.cancel_timeout = saved_timeout
+         end)
+         async.cancel_timeout = 1  -- speed up the test
+
+         local lane_status
+         copas(function()
+            local future = async.addthread(assert(load([[
+               local socket = require "socket"
+               socket.sleep(10)  -- long C-level block, soft cancel won't stop it
+            ]])))
+            copas.sleep(0.5)
+            future:cancel()
+            copas.sleep(1.5)  -- wait past cancel_timeout
+            lane_status = future.lane.status
+            done()
+         end)
+         assert.are_equal("cancelled", lane_status)
+      end)
+
+
+      it("cancel() releases a coroutine blocked in get()", function()
+         local result = {}
+         copas(function()
+            local future = async.addthread(assert(load([[
+               local socket = require "socket"
+               socket.sleep(5)
+               return "hello"
+            ]])))
+            copas.addthread(function()
+               result.get = { future:get() }
+            end)
+            copas.sleep(0.5) -- ensure the get() coroutine is already waiting
+            result.cancel = future:cancel()
+            copas.sleep(0.5) -- let the woken coroutine run
+            done()
+         end)
+         assert.is_true(result.cancel)
+         assert.same({ false, "cancelled" }, result.get)
+      end)
+
+
+      it("concurrent get() is allowed", function()
+         local result = {}
+         copas(function()
+            local future = async.addthread(assert(load([[
+               local socket = require "socket"
+               socket.sleep(1)
                return "hello", "world"
             ]])))
             copas.addthread(function()
-               result.success = { future:get() }
-               done()
+               result[1] = { future:get() }
             end)
-            copas.sleep(0.1) -- ensure the 'get' is in progress
-            copas.addthread(function() -- test future:try
-               result.try = { pcall(future.try, future) }
+            copas.sleep(0.1) -- ensure the first get() is already waiting
+            copas.addthread(function()
+               result[2] = { future:get() }
             end)
-            copas.addthread(function() -- test future:get
-               result.get = { pcall(future.get, future) }
-            end)
+            while not result[1] or not result[2] do
+               copas.sleep(0.1)
+            end
+            done()
          end)
-         assert(result.get[2]:match("concurrent access to future"))
-         assert(result.try[2]:match("concurrent access to future"))
-         assert.same({"hello", "world"}, result.success)
+         assert.same({true, "hello", "world"}, result[1])
+         assert.same({true, "hello", "world"}, result[2])
       end)
 
    end) -- futures
@@ -119,11 +201,12 @@ describe("copas-async", function()
    describe("os_execute:", function()
 
       it("returns the exit code on success", function()
-         local r, t, c
+         local ok, r, t, c
          copas(function()
-            r, t, c = async.os_execute("sleep 1")
+            ok, r, t, c = async.os_execute("sleep 1")
             done()
          end)
+         assert.same(true, ok) -- pcall-style ok flag
          if _VERSION == "Lua 5.1" then
             assert(r == 0 or r == true, "expected the result code to be 0 or 'true'")
          else
@@ -135,11 +218,12 @@ describe("copas-async", function()
 
 
       it("returns the exit code on failure", function()
-         local r, t, c
+         local ok, r, t, c
          copas(function()
-            r, t, c = async.os_execute("sleep 1; exit 123")
+            ok, r, t, c = async.os_execute("sleep 1; exit 123")
             done()
          end)
+         assert.same(true, ok) -- pcall-style ok flag (task ran; os exit code is in r)
          if _VERSION == "Lua 5.1" then
             assert.not_equal(0, r)
          else
