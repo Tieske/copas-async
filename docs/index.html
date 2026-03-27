@@ -27,8 +27,10 @@
 <h1>copas-async</h1>
 
 
+
 <h2>Contents</h2>
 <ul>
+<li><a href="#Fields">Fields</a></li>
 <li><a href="#Class_future">Class future </a></li>
 <li><a href="#Async_module">Async module </a></li>
 </ul>
@@ -73,14 +75,25 @@ local ok, err = async(sometask)
     </ul>
     <h3>Info:</h3>
     <ul>
-        <li><strong>Copyright</strong>: Copyright (c) 2016 Hisham Muhammad, 2022-2023 Thijs Schreijer</li>
+        <li><strong>Copyright</strong>: Copyright (c) 2016 Hisham Muhammad, 2022-2026 Thijs Schreijer</li>
         <li><strong>License</strong>: MIT, see <a href="topics/LICENSE.md.html#">LICENSE.md</a>.</li>
         <li><strong>Author</strong>: Hisham Muhammad</li>
     </ul>
 
 
+<h2><a href="#Fields">Fields</a></h2>
+<table class="function_list">
+	<tr>
+	<td class="name" nowrap><a href="#cancel_timeout">cancel_timeout</a></td>
+	<td class="summary">Timeout in seconds before a cancelled lane is force-killed.</td>
+	</tr>
+</table>
 <h2><a href="#Class_future">Class future </a></h2>
 <table class="function_list">
+	<tr>
+	<td class="name" nowrap><a href="#future:cancel">future:cancel ()</a></td>
+	<td class="summary">Cancels the future if the task has not yet completed.</td>
+	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#future:get">future:get ()</a></td>
 	<td class="summary">Waits until the async thread finishes (without locking other Copas coroutines) and
@@ -89,7 +102,7 @@ local ok, err = async(sometask)
 	<tr>
 	<td class="name" nowrap><a href="#future:try">future:try ()</a></td>
 	<td class="summary">Obtains the result value of the async thread function if it is already available,
- or returns <code>false</code> if it is still running.</td>
+ or returns <code>async.PENDING</code> if it is still running.</td>
 	</tr>
 </table>
 <h2><a href="#Async_module">Async module </a></h2>
@@ -116,6 +129,27 @@ local ok, err = async(sometask)
 <br/>
 
 
+    <h2 class="section-header "><a name="Fields"></a>Fields</h2>
+
+    <dl class="function">
+    <dt>
+    <a name = "cancel_timeout"></a>
+    <strong>cancel_timeout</strong>
+    </dt>
+    <dd>
+    Timeout in seconds before a cancelled lane is force-killed.
+ After <code>future:cancel()</code> the underlying Lanes thread is soft-cancelled first.
+ If it is still running after this many seconds it will be hard-killed
+ (<code>pthread_cancel</code>). Set to <a href="https://www.lua.org/manual/5.4/manual.html#pdf-math.huge">math.huge</a> to never force-kill.
+
+
+
+
+
+
+
+</dd>
+</dl>
     <h2 class="section-header has-description"><a name="Class_future"></a>Class future </h2>
 
           <div class="section-description">
@@ -123,6 +157,33 @@ local ok, err = async(sometask)
  See <a href="index.html#async.addthread">async.addthread</a>.
           </div>
     <dl class="function">
+    <dt>
+    <a name = "future:cancel"></a>
+    <strong>future:cancel ()</strong>
+    </dt>
+    <dd>
+    Cancels the future if the task has not yet completed.
+ Returns true if cancelled, false if already done.
+ Any coroutines blocked in <code>get()</code> will be released and return false+"cancelled".</p>
+
+<p> The underlying Lanes thread is soft-cancelled immediately. If it is still running
+ after <code>async.cancel_timeout</code> seconds (e.g. blocked inside a C function such as
+ <code>socket.sleep</code> or <a href="https://www.lua.org/manual/5.4/manual.html#pdf-os.execute">os.execute</a>), it will be force-killed. The Copas side is
+ always cancelled immediately; any result produced by the thread afterwards is
+ discarded.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+        true if cancelled, false if already done
+    </ol>
+
+
+
+
+</dd>
     <dt>
     <a name = "future:get"></a>
     <strong>future:get ()</strong>
@@ -132,13 +193,14 @@ local ok, err = async(sometask)
  obtains the result values of the async thread function. </p>
 
 <p> Calling on the future object is a shortcut to this <a href="index.html#future:get">get</a> method.
+ Multiple coroutines may call <a href="index.html#future:get">get</a> concurrently; all will be released when the result arrives.
 
 
 
     <h3>Returns:</h3>
     <ol>
 
-        ... the async function results
+        like pcall: true + results on success, false + errmsg on error
     </ol>
 
 
@@ -146,16 +208,17 @@ local ok, err = async(sometask)
     <h3>Usage:</h3>
     <ul>
         <pre class="example"><span class="keyword">local</span> msg = <span class="string">"hello"</span>
-copas(<span class="keyword">function</span>()
+<span class="function-name">copas</span>(<span class="keyword">function</span>()
    <span class="comment">-- schedule a thread using LuaLanes
-</span>   <span class="keyword">local</span> future = async.addthread(<span class="keyword">function</span>()
-      <span class="global">os</span>.execute(<span class="string">"for i in seq 5; do echo 'thread says "</span>..msg..<span class="string">" '$i; sleep 1; done"</span>)
+</span>   <span class="keyword">local</span> future = async.<span class="function-name">addthread</span>(<span class="keyword">function</span>()
+      <span class="global">os</span>.<span class="function-name">execute</span>(<span class="string">"for i in seq 5; do echo 'thread says "</span>..msg..<span class="string">" '$i; sleep 1; done"</span>)
       <span class="keyword">return</span> <span class="number">123</span>
    <span class="keyword">end</span>)
 
    <span class="comment">-- The following will wait for the thread to complete (5 secs)
 </span>   <span class="comment">-- Note: calling <code>future()</code> is the same as <code>future:get()</code>
-</span>   <span class="global">assert</span>(<span class="number">123</span> == future(), <span class="string">"expected exit code 123"</span>)
+</span>   <span class="keyword">local</span> ok, result = <span class="function-name">future</span>()
+   <span class="global">assert</span>(ok <span class="keyword">and</span> <span class="number">123</span> == result, <span class="string">"expected exit code 123"</span>)
 <span class="keyword">end</span>)</pre>
     </ul>
 
@@ -166,14 +229,18 @@ copas(<span class="keyword">function</span>()
     </dt>
     <dd>
     Obtains the result value of the async thread function if it is already available,
- or returns <code>false</code> if it is still running.  This function always returns immediately.
+ or returns <code>async.PENDING</code> if it is still running.  This function always returns immediately.
 
 
 
     <h3>Returns:</h3>
     <ol>
-
-        <code>true + ...</code> (the async function results) when complete, or <code>false</code> if not yet available
+        <li>
+        <code>async.PENDING</code> (false) when still running</li>
+        <li>
+        <code>async.SUCCESS</code> (true) + results when complete</li>
+        <li>
+        <code>async.ERROR</code> ("error") + errmsg when the task failed</li>
     </ol>
 
 
@@ -181,21 +248,25 @@ copas(<span class="keyword">function</span>()
     <h3>Usage:</h3>
     <ul>
         <pre class="example"><span class="keyword">local</span> msg = <span class="string">"hello"</span>
-copas(<span class="keyword">function</span>()
+<span class="function-name">copas</span>(<span class="keyword">function</span>()
    <span class="comment">-- schedule a thread using LuaLanes
-</span>   <span class="keyword">local</span> future = async.addthread(<span class="keyword">function</span>()
-      <span class="global">os</span>.execute(<span class="string">"for i in seq 5; do echo 'thread says "</span>..msg..<span class="string">" '$i; sleep 1; done"</span>)
+</span>   <span class="keyword">local</span> future = async.<span class="function-name">addthread</span>(<span class="keyword">function</span>()
+      <span class="global">os</span>.<span class="function-name">execute</span>(<span class="string">"for i in seq 5; do echo 'thread says "</span>..msg..<span class="string">" '$i; sleep 1; done"</span>)
       <span class="keyword">return</span> <span class="number">123</span>
    <span class="keyword">end</span>)
 
    <span class="comment">-- loop to wait for result
 </span>   <span class="keyword">local</span> done, result
    <span class="keyword">while</span> <span class="keyword">not</span> done <span class="keyword">do</span>
-      copas.sleep(<span class="number">0.1</span>)
-      done, result = future:try()
+      copas.<span class="function-name">sleep</span>(<span class="number">0.1</span>)
+      done, result = future:<span class="function-name">try</span>()
    <span class="keyword">end</span>
 
-   <span class="global">assert</span>(<span class="number">123</span> == future(), <span class="string">"expected exit code 123"</span>)
+   <span class="keyword">if</span> done == async.ERROR <span class="keyword">then</span>
+      <span class="global">print</span>(<span class="string">"oops... something went wrong: "</span> .. result)
+   <span class="keyword">else</span>
+      <span class="global">assert</span>(<span class="number">123</span> == result, <span class="string">"expected exit code 123"</span>)
+   <span class="keyword">end</span>
 <span class="keyword">end</span>)</pre>
     </ul>
 
@@ -211,7 +282,7 @@ copas(<span class="keyword">function</span>()
     <dd>
     Runs a function in its own thread, and returns a <a href="index.html#future">future</a>. </p>
 
-<p> Note that the function runs it its own Lanes context, so upvalues are
+<p> Note that the function runs in its own Lanes context, so upvalues are
  copied into the function. When modified in that function, it will not update
  the original values living Copas side.
 
@@ -244,7 +315,7 @@ copas(<span class="keyword">function</span>()
  their output (async) without affecting the Copas scheduler as a whole.</p>
 
 <p> This function returns (immediately) a descriptor object with an API that matches that of the
- object returned by <a href="https://www.lua.org/manual/5.1/manual.html#pdf-io.popen">io.popen</a>. When commands are issued, this causes
+ object returned by <a href="https://www.lua.org/manual/5.4/manual.html#pdf-io.popen">io.popen</a>. When commands are issued, this causes
  the current coroutine to wait until the response is returned, without locking
  other coroutines (in other words, it uses <a href="index.html#future">future</a> internally). Only the
  methods <code>fd:read</code>, <code>fd:write</code>, <code>fd:close</code>, and <code>fd:lines</code> are currently supported.
@@ -255,12 +326,12 @@ copas(<span class="keyword">function</span>()
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">command</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         The command to pass to <a href="https://www.lua.org/manual/5.1/manual.html#pdf-io.popen">io.popen</a> in the async thread
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.4/manual.html#6.4">string</a></span>
+         The command to pass to <a href="https://www.lua.org/manual/5.4/manual.html#pdf-io.popen">io.popen</a> in the async thread
         </li>
         <li><span class="parameter">mode</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         The mode to pass to <a href="https://www.lua.org/manual/5.1/manual.html#pdf-io.popen">io.popen</a> in the async thread
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.4/manual.html#6.4">string</a></span>
+         The mode to pass to <a href="https://www.lua.org/manual/5.4/manual.html#pdf-io.popen">io.popen</a> in the async thread
          (<em>default</em> "r")
         </li>
     </ul>
@@ -285,22 +356,22 @@ copas(<span class="keyword">function</span>()
  affecting the Copas scheduler as a whole.</p>
 
 <p> This function causes the current coroutine to wait until the command is finished,
- without locking other coroutines (in other words, it internally runs <code>get()</code>
+ without blocking other coroutines (in other words, it internally runs <code>get()</code>
  in its <a href="index.html#future">future</a>).
 
 
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">command</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         The command to pass to <a href="https://www.lua.org/manual/5.1/manual.html#pdf-os.execute">os.execute</a> in the async thread
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.4/manual.html#6.4">string</a></span>
+         The command to pass to <a href="https://www.lua.org/manual/5.4/manual.html#pdf-os.execute">os.execute</a> in the async thread
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-        the same as <a href="https://www.lua.org/manual/5.1/manual.html#pdf-os.execute">os.execute</a> (can differ by platform and Lua version)
+        like pcall: true + os.execute results on success, false + errmsg on error
     </ol>
 
 
@@ -314,6 +385,7 @@ copas(<span class="keyword">function</span>()
     <dd>
     Runs a function in its own thread, and waits for the results.
  This will block the current thread, but will not block other Copas threads.
+ Returns like pcall: true + results on success, false + errmsg on error.
 
 
     <h3>Parameters:</h3>
@@ -327,7 +399,7 @@ copas(<span class="keyword">function</span>()
     <h3>Returns:</h3>
     <ol>
 
-        the original functions return values
+        true + the function's return values, or false + errmsg
     </ol>
 
 
@@ -340,9 +412,9 @@ copas(<span class="keyword">function</span>()
 </span><span class="comment">--
 </span><span class="comment">-- Can be called non-blocking like this:
 </span>
-<span class="keyword">local</span> result, err = async.run(fn)
+<span class="keyword">local</span> ok, result, err = async.<span class="function-name">run</span>(fn)
 <span class="comment">-- or even shorter;
-</span><span class="keyword">local</span> result, err = async(fn)</pre>
+</span><span class="keyword">local</span> ok, result, err = <span class="function-name">async</span>(fn)</pre>
     </ul>
 
 </dd>
@@ -352,8 +424,8 @@ copas(<span class="keyword">function</span>()
 </div> <!-- id="content" -->
 </div> <!-- id="main" -->
 <div id="about">
-<i>generated by <a href="http://github.com/stevedonovan/LDoc">LDoc 1.4.6</a></i>
-<i style="float:right;">Last updated 2023-06-26 20:07:05 </i>
+<i>generated by <a href="http://github.com/lunarmodules/LDoc">LDoc 1.5.0</a></i>
+<i style="float:right;">Last updated 2026-03-27 19:04:01 </i>
 </div> <!-- id="about" -->
 </div> <!-- id="container" -->
 </body>
