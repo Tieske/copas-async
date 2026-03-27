@@ -143,9 +143,31 @@ local function new_future(ch, ch_id)
    --- Obtains the result value of the async thread function if it is already available,
    -- or returns `async.PENDING` if it is still running. This function always returns immediately.
    -- @function future:try
-   -- @return `async.PENDING` (false) when still running;
-   --         `async.SUCCESS` (true) + results when complete;
-   --         `async.ERROR` ("error") + errmsg when the task failed.
+   -- @return `async.PENDING` (false) when still running
+   -- @return `async.SUCCESS` (true) + results when complete
+   -- @return `async.ERROR` ("error") + errmsg when the task failed
+   -- @usage
+   -- local msg = "hello"
+   -- copas(function()
+   --    -- schedule a thread using LuaLanes
+   --    local future = async.addthread(function()
+   --       os.execute("for i in seq 5; do echo 'thread says "..msg.." '$i; sleep 1; done")
+   --       return 123
+   --    end)
+   --
+   --    -- loop to wait for result
+   --    local done, result
+   --    while not done do
+   --       copas.sleep(0.1)
+   --       done, result = future:try()
+   --    end
+   --
+   --    if done == async.ERROR then
+   --       print("oops... something went wrong: " .. result)
+   --    else
+   --       assert(123 == result, "expected exit code 123")
+   --    end
+   -- end)
    function fut:try()
       if not self.results then
          local key, value = ch:receive(0, ch_id)
